@@ -14,9 +14,7 @@
 int main(int argc, char ** argv)
 {
 
-    for (int i = 0; i < 10; i++) {
-        forTest();
-    }
+    start_server(3055, on_client_conn);
 
     return 1;
 }

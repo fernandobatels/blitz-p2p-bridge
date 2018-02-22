@@ -15,5 +15,5 @@
 
 Test(basic, start)
 {
-    cr_assert_eq(forTest(), 0);
+    cr_assert_eq(for_test(), 0);
 }
