@@ -9,11 +9,13 @@
  */
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <errno.h>
 #include <stdbool.h>
 #include <string.h>
+#include <pthread.h>
 #include "api.h"
 
 int for_test()
@@ -23,13 +25,13 @@ int for_test()
     return 0;
 }
 
-bool start_server(int port, void (*on_conn)(saddr, int))
+bool start_server(int port)
 {
-    saddr server_addr;
+    struct sockaddr_in server_addr;
     int server;
     int max_wait_size = 4;
 
-    memset(&server_addr, 0, sizeof(saddr));
+    memset(&server_addr, 0, sizeof(struct sockaddr_in));
 
     server_addr.sin_family = AF_INET;
     server_addr.sin_port = htons(port);
@@ -55,7 +57,7 @@ bool start_server(int port, void (*on_conn)(saddr, int))
     while (true) {
 
         int client;
-        saddr client_addr;
+        struct sockaddr_in client_addr;
         int client_addr_len = 0;
 
         if ((client = accept(server, &client_addr, &client_addr_len)) < 0) {
@@ -63,13 +65,17 @@ bool start_server(int port, void (*on_conn)(saddr, int))
             return false;
         }
 
-        printf("Connectin client %s...\n", inet_ntoa(client_addr.sin_addr));
+        struct client_infos *c;
+        pthread_t tid;
 
-        (*on_conn)(client_addr, client);
+        c = malloc(sizeof(struct client_infos));
+        inet_ntop(AF_INET, &client_addr.sin_addr, c->addr, INET_ADDRSTRLEN);
+        c->socket = client;
 
-        printf("Closing client %s...\n", inet_ntoa(client_addr.sin_addr));
-
-        close(client);
+        if (pthread_create(&tid, NULL, on_client_conn, (void *) c) < 0) {
+            perror("Could not create thread for client");
+            return false;
+        }
 
     }
 
@@ -80,11 +86,24 @@ bool start_server(int port, void (*on_conn)(saddr, int))
     return true;
 }
 
-void on_client_conn(saddr client_addr, int client)
+void *on_client_conn(void *vargp)
 {
-    char buffer[] = "Hi! :)\n";
+    struct client_infos *c = (struct client_infos*) vargp;
+    int len_received = 0;
+    char buffer_received[MAX_CLIENT_IO];
 
-    for (int i = 0; i < 10; i++) {
-        send(client, buffer, strlen(buffer), 0);
+    printf("Connection client %s...\n", c->addr);
+
+    {//For test
+        char buff_test[] = "Hi. Testing...\n";
+        send(c->socket, buff_test, strlen(buff_test), 0);
     }
+
+    while ((len_received = recv(c->socket, buffer_received, MAX_CLIENT_IO, 0)) > 0) {
+        printf("Received: %d '%s'\n", len_received, buffer_received);
+    }
+
+    printf("Closing client %s...\n", c->addr);
+
+    close(c->socket);
 }

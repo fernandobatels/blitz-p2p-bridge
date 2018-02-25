@@ -8,8 +8,15 @@
  * Copyright 2018 Luis Fernando Batels <luisfbatels@gmail.com>
  */
 #include <stdbool.h>
+#include <arpa/inet.h>
 
-typedef struct sockaddr_in saddr;
+#define DEFAULT_SERVER_PORT 3055
+#define MAX_CLIENT_IO 1024
+
+struct client_infos {
+    char addr[INET_ADDRSTRLEN];
+    int socket;
+};
 
 /**
  * For test
@@ -20,16 +27,12 @@ int for_test();
  * Start TCP server
  *
  * @param int port - Port to listen
- * @param func on_conn - Function to call on new client connection
  *
  * @return bool
  */
-bool start_server(int port, void (*on_conn)(saddr, int));
+bool start_server(int port);
 
 /**
- * Default action in client connect
- *
- * @param saddr client_addr - Client address
- * @param int client - Client connection
+ * Event on client connect on server
  */
-void on_client_conn(saddr client_addr, int client);
+void *on_client_conn(void *vargp);

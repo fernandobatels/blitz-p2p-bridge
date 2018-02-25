@@ -14,7 +14,7 @@
 int main(int argc, char ** argv)
 {
 
-    start_server(3055, on_client_conn);
+    start_server(DEFAULT_SERVER_PORT);
 
     return 1;
 }
