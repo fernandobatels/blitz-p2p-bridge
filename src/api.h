@@ -12,11 +12,19 @@
 
 #define DEFAULT_SERVER_PORT 3055
 #define MAX_CLIENT_IO 1024
+#define MAX_CLIENTS_WAIT_TO_CONNECT 10
+#define MAX_CLIENT_WAITING_LIST 10
+#define SIZE_CLIENT_ID 15
 
 struct client_infos {
     char addr[INET_ADDRSTRLEN];
     int socket;
+    char id[SIZE_CLIENT_ID];
+    char id_partner_expected[SIZE_CLIENT_ID];
+    struct client_infos* partner;
 };
+
+struct client_infos* waiting_list[MAX_CLIENT_WAITING_LIST];
 
 /**
  * For test

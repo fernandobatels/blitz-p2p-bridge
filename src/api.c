@@ -29,7 +29,6 @@ bool start_server(int port)
 {
     struct sockaddr_in server_addr;
     int server;
-    int max_wait_size = 4;
 
     memset(&server_addr, 0, sizeof(struct sockaddr_in));
 
@@ -47,7 +46,7 @@ bool start_server(int port)
         return false;
     }
 
-    if (listen(server, max_wait_size) < 0) {
+    if (listen(server, MAX_CLIENTS_WAIT_TO_CONNECT) < 0) {
         perror("Could not listen socket\n");
         return false;
     }
@@ -73,7 +72,7 @@ bool start_server(int port)
         c->socket = client;
 
         if (pthread_create(&tid, NULL, on_client_conn, (void *) c) < 0) {
-            perror("Could not create thread for client");
+            perror("Could not create thread for client\n");
             return false;
         }
 
@@ -94,13 +93,52 @@ void *on_client_conn(void *vargp)
 
     printf("Connection client %s...\n", c->addr);
 
-    {//For test
-        char buff_test[] = "Hi. Testing...\n";
-        send(c->socket, buff_test, strlen(buff_test), 0);
-    }
+   // {//For test
+   //     char buff_test[] = "Hi. Testing...\n";
+   //     send(c->socket, buff_test, strlen(buff_test), 0);
+   // }
 
     while ((len_received = recv(c->socket, buffer_received, MAX_CLIENT_IO, 0)) > 0) {
-        printf("Received: %d '%s'\n", len_received, buffer_received);
+
+        if (strlen(c->id) == 0) {
+            //First step: Identify the client
+
+            if (len_received != SIZE_CLIENT_ID) {
+                perror("Client sent invalid id. Aborting connection..\n");
+                break;
+            }
+
+            strcpy(c->id, buffer_received);
+
+        } else if (strlen(c->id_partner_expected) == 0) {
+            //Second step: Identify/Connect the partner
+
+            //Waiting for
+            if (len_received != SIZE_CLIENT_ID) {
+                perror("Client sent invalid partner id. Aborting connection..\n");
+                break;
+            }
+
+            strcpy(c->id_partner_expected, buffer_received);
+
+            //Checking if other client is waiting for him
+            //for (int i = 0; i < MAX_CLIENT_WAITING_LIST; i++) {
+            //    if (waiting_list[i]) {
+            //        if (strcmp(waiting_list[i]->id_partner_expected, c->id) == 0) {
+            //            printf("Client %s, with id %s, is partner of client %s, with id %s\n", c->addr, c->id, waiting_list[i]->addr, waiting_list[i]->id);
+            //        }
+            //    }
+            //}
+
+        }
+
+        printf("Received %d bytes from client %s, with id %s", len_received, c->addr, c->id);
+
+        printf("%d\n", strlen(c->id));//STRCPY DUPLICATING CONTENT OF C->ID ???!!!
+
+        memset(buffer_received, 0, MAX_CLIENT_IO);
+
+        fflush(stdout);
     }
 
     printf("Closing client %s...\n", c->addr);
