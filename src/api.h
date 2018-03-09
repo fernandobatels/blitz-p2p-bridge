@@ -22,6 +22,7 @@ struct client_infos {
     char id[SIZE_CLIENT_ID + 1];
     char id_partner_expected[SIZE_CLIENT_ID + 1];
     struct client_infos* partner;
+    bool closed_by_partner;
 };
 
 struct client_infos* waiting_list[MAX_CLIENT_WAITING_LIST];

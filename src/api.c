@@ -132,9 +132,16 @@ void *on_client_conn(void *vargp)
             //Checking if other client is waiting for him
             for (int i = 0; i < MAX_CLIENT_WAITING_LIST; i++) {
                 if (waiting_list[i]) {
-                    if (strcmp(waiting_list[i]->id_partner_expected, c->id) == 0) {
-                        printf("%s is partner of %s\n", waiting_list[i]->id_partner_expected, c->id);
+                    if (strcmp(c->id, waiting_list[i]->id_partner_expected) == 0) {
+
+                        printf("%s is partner of %s\n", c->id, waiting_list[i]->id_partner_expected);
+
+                        c->partner = waiting_list[i];
+                        waiting_list[i]->partner = c;
+
                         need_waiting_list = false;
+                        waiting_list[i] = 0;
+                        break;
                     }
                 }
             }
@@ -152,13 +159,48 @@ void *on_client_conn(void *vargp)
                 }
             }
 
-        }
+        } else {
 
-        printf("Received %d bytes from %s\n", len_received, c->id);
+            printf("%s sent %d bytes to %s\n", c->id, len_received, c->id_partner_expected);
+
+            send(c->partner->socket, buffer_received, strlen(buffer_received), 0);
+
+        }
 
     }
 
-    printf("Closing client %s...\n", c->addr);
+    if (!c->closed_by_partner) {
 
-    close(c->socket);
+        printf("Closing client %s...\n", c->addr);
+
+        close(c->socket);
+
+        // If the client informed the expected partner
+        if (strlen(c->id_partner_expected) > 0) {
+
+            // Removing client from wainting list if his partner did not arrive
+            for (int i = 0; i < MAX_CLIENT_WAITING_LIST; i++) {
+                if (waiting_list[i]) {
+                    if (strcmp(c->id, waiting_list[i]->id_partner_expected) == 0) {
+                        waiting_list[i] = 0;
+                        break;
+                    }
+                }
+            }
+
+            // When client partner is linked
+            if (c->partner) {
+
+                printf("Closing partner of %s...\n", c->id);
+
+                c->partner->closed_by_partner = true;
+                close(c->partner->socket);
+            }
+
+        }
+
+    }
+
+
+    c = 0;
 }
