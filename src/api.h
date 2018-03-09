@@ -19,8 +19,8 @@
 struct client_infos {
     char addr[INET_ADDRSTRLEN];
     int socket;
-    char id[SIZE_CLIENT_ID];
-    char id_partner_expected[SIZE_CLIENT_ID];
+    char id[SIZE_CLIENT_ID + 1];
+    char id_partner_expected[SIZE_CLIENT_ID + 1];
     struct client_infos* partner;
 };
 

@@ -89,7 +89,7 @@ void *on_client_conn(void *vargp)
 {
     struct client_infos *c = (struct client_infos*) vargp;
     int len_received = 0;
-    char buffer_received[MAX_CLIENT_IO];
+    char buffer_received[MAX_CLIENT_IO + 1];
 
     printf("Connection client %s...\n", c->addr);
 
@@ -100,45 +100,62 @@ void *on_client_conn(void *vargp)
 
     while ((len_received = recv(c->socket, buffer_received, MAX_CLIENT_IO, 0)) > 0) {
 
+        buffer_received[len_received] = 0;
+
+        if (buffer_received[len_received - 1] == '\n')
+            buffer_received[len_received - 2] = '\0';
+
         if (strlen(c->id) == 0) {
             //First step: Identify the client
 
-            if (len_received != SIZE_CLIENT_ID) {
+            if (strlen(buffer_received) != SIZE_CLIENT_ID) {
                 perror("Client sent invalid id. Aborting connection..\n");
                 break;
             }
 
             strcpy(c->id, buffer_received);
 
+            printf("Client %s is %s\n", c->addr, c->id);
+
         } else if (strlen(c->id_partner_expected) == 0) {
             //Second step: Identify/Connect the partner
 
-            //Waiting for
-            if (len_received != SIZE_CLIENT_ID) {
+            if (strlen(buffer_received) != SIZE_CLIENT_ID) {
                 perror("Client sent invalid partner id. Aborting connection..\n");
                 break;
             }
 
             strcpy(c->id_partner_expected, buffer_received);
 
+            bool need_waiting_list = true;
+
             //Checking if other client is waiting for him
-            //for (int i = 0; i < MAX_CLIENT_WAITING_LIST; i++) {
-            //    if (waiting_list[i]) {
-            //        if (strcmp(waiting_list[i]->id_partner_expected, c->id) == 0) {
-            //            printf("Client %s, with id %s, is partner of client %s, with id %s\n", c->addr, c->id, waiting_list[i]->addr, waiting_list[i]->id);
-            //        }
-            //    }
-            //}
+            for (int i = 0; i < MAX_CLIENT_WAITING_LIST; i++) {
+                if (waiting_list[i]) {
+                    if (strcmp(waiting_list[i]->id_partner_expected, c->id) == 0) {
+                        printf("%s is partner of %s\n", waiting_list[i]->id_partner_expected, c->id);
+                        need_waiting_list = false;
+                    }
+                }
+            }
+
+            //Without partner him go to waiting list
+            if (need_waiting_list) {
+
+                printf("%s is waiting for %s\n", c->id, c->id_partner_expected);
+
+                for (int i = 0; i < MAX_CLIENT_WAITING_LIST; i++) {
+                    if (!waiting_list[i]) {
+                        waiting_list[i] = c;
+                        break;
+                    }
+                }
+            }
 
         }
 
-        printf("Received %d bytes from client %s, with id %s", len_received, c->addr, c->id);
+        printf("Received %d bytes from %s\n", len_received, c->id);
 
-        printf("%d\n", strlen(c->id));//STRCPY DUPLICATING CONTENT OF C->ID ???!!!
-
-        memset(buffer_received, 0, MAX_CLIENT_IO);
-
-        fflush(stdout);
     }
 
     printf("Closing client %s...\n", c->addr);
