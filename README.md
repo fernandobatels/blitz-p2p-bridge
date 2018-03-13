@@ -17,10 +17,10 @@ The paper [Peer-to-Peer Communication Across Network Address Translators](http:/
 
 ## TODO
 
-- [ ] P2P working:
+- [x] P2P working:
     - [x] Connection between clients, with waiting list
     - [x] Send/Receing content from partner
-    - [ ] Logs/Output with datetime, ID, sizes and IP
+    - [x] Logs/Output with datetime, ID, sizes and IP
 - [ ] UnitTests
 - [ ] Encrypted communication
 - [ ] Pre-registered ID's

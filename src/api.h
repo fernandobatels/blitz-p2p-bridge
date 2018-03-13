@@ -23,6 +23,7 @@ struct client_infos {
     char id_partner_expected[SIZE_CLIENT_ID + 1];
     struct client_infos* partner;
     bool closed_by_partner;
+    bool partner_connected;
 };
 
 struct client_infos* waiting_list[MAX_CLIENT_WAITING_LIST];
@@ -45,3 +46,16 @@ bool start_server(int port);
  * Event on client connect on server
  */
 void *on_client_conn(void *vargp);
+
+#define MS_SERVER 0
+#define MS_CLIENT 1
+#define MS_CLIENT_PARTNER 2
+
+/**
+ * Write log for a event with clients
+ *
+ * @param struct client_infos* client - Client
+ * @param char msg[] - Message
+ * @param int typeMsg - Type of message
+ */
+void event_log(struct client_infos* client, char msg[], int typeMsg);

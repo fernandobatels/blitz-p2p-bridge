@@ -16,6 +16,7 @@
 #include <stdbool.h>
 #include <string.h>
 #include <pthread.h>
+#include <unistd.h>
 #include "api.h"
 
 int for_test()
@@ -41,7 +42,7 @@ bool start_server(int port)
         return false;
     }
 
-    if (bind(server, &server_addr, sizeof(server_addr)) < 0) {
+    if (bind(server, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
         perror("Could not bind socket\n");
         return false;
     }
@@ -51,7 +52,7 @@ bool start_server(int port)
         return false;
     }
 
-    printf("Starting server...\n");
+    event_log(0, "Server started", MS_SERVER);
 
     while (true) {
 
@@ -59,7 +60,7 @@ bool start_server(int port)
         struct sockaddr_in client_addr;
         int client_addr_len = 0;
 
-        if ((client = accept(server, &client_addr, &client_addr_len)) < 0) {
+        if ((client = accept(server, (struct sockaddr *)&client_addr, &client_addr_len)) < 0) {
             perror("Could not accept client\n");
             return false;
         }
@@ -78,7 +79,7 @@ bool start_server(int port)
 
     }
 
-    printf("Closing server...\n");
+    event_log(0, "Server closed", MS_SERVER);
 
     close(server);
 
@@ -91,34 +92,43 @@ void *on_client_conn(void *vargp)
     int len_received = 0;
     char buffer_received[MAX_CLIENT_IO + 1];
 
-    printf("Connection client %s...\n", c->addr);
+    event_log(c, "Connection started", MS_CLIENT);
 
-   // {//For test
-   //     char buff_test[] = "Hi. Testing...\n";
-   //     send(c->socket, buff_test, strlen(buff_test), 0);
-   // }
+    c->partner_connected = false;
+    bool id_valid = false;
 
     while ((len_received = recv(c->socket, buffer_received, MAX_CLIENT_IO, 0)) > 0) {
+        //First step: Identify the client
 
         buffer_received[len_received] = 0;
 
         if (buffer_received[len_received - 1] == '\n')
             buffer_received[len_received - 2] = '\0';
 
-        if (strlen(c->id) == 0) {
-            //First step: Identify the client
+        if (strlen(buffer_received) != SIZE_CLIENT_ID) {
+            perror("Client sent invalid id. Aborting connection..\n");
+            break;
+        }
 
-            if (strlen(buffer_received) != SIZE_CLIENT_ID) {
-                perror("Client sent invalid id. Aborting connection..\n");
-                break;
-            }
+        strcpy(c->id, buffer_received);
 
-            strcpy(c->id, buffer_received);
+        event_log(c, "Client id defined", MS_CLIENT);
 
-            printf("Client %s is %s\n", c->addr, c->id);
+        id_valid = true;
+        break;
+    }
 
-        } else if (strlen(c->id_partner_expected) == 0) {
+    if (id_valid) {
+
+        id_valid = false;
+
+        while ((len_received = recv(c->socket, buffer_received, MAX_CLIENT_IO, 0)) > 0) {
             //Second step: Identify/Connect the partner
+
+            buffer_received[len_received] = 0;
+
+            if (buffer_received[len_received - 1] == '\n')
+                buffer_received[len_received - 2] = '\0';
 
             if (strlen(buffer_received) != SIZE_CLIENT_ID) {
                 perror("Client sent invalid partner id. Aborting connection..\n");
@@ -134,13 +144,21 @@ void *on_client_conn(void *vargp)
                 if (waiting_list[i]) {
                     if (strcmp(c->id, waiting_list[i]->id_partner_expected) == 0) {
 
-                        printf("%s is partner of %s\n", c->id, waiting_list[i]->id_partner_expected);
+                        event_log(c, "Is partner of", MS_CLIENT_PARTNER);
 
                         c->partner = waiting_list[i];
                         waiting_list[i]->partner = c;
+                        c->partner_connected = true;
+                        waiting_list[i]->partner_connected = true;
 
                         need_waiting_list = false;
                         waiting_list[i] = 0;
+
+                        // Warns them that they are connected
+                        char* sent = "serversay:partner-connected\n";
+                        send(c->socket, sent, strlen(sent), 0);
+                        send(c->partner->socket, sent, strlen(sent), 0);
+
                         break;
                     }
                 }
@@ -149,7 +167,7 @@ void *on_client_conn(void *vargp)
             //Without partner him go to waiting list
             if (need_waiting_list) {
 
-                printf("%s is waiting for %s\n", c->id, c->id_partner_expected);
+                event_log(c, "Is waiting for", MS_CLIENT_PARTNER);
 
                 for (int i = 0; i < MAX_CLIENT_WAITING_LIST; i++) {
                     if (!waiting_list[i]) {
@@ -159,19 +177,38 @@ void *on_client_conn(void *vargp)
                 }
             }
 
-        } else {
+            id_valid = true;
+            break;
+        }
 
-            printf("%s sent %d bytes to %s\n", c->id, len_received, c->id_partner_expected);
+        if (id_valid) {
+            while ((len_received = recv(c->socket, buffer_received, MAX_CLIENT_IO, 0)) > 0) {
 
-            send(c->partner->socket, buffer_received, strlen(buffer_received), 0);
+                buffer_received[len_received] = 0;
 
+                if (c->partner_connected) {
+                    char sent[30];
+                    sprintf(sent, "Sent %d bytes to", len_received);
+
+                    event_log(c, sent, MS_CLIENT_PARTNER);
+
+                    send(c->partner->socket, buffer_received, strlen(buffer_received), 0);
+
+                } else {
+                    char sent[60];
+                    sprintf(sent, "Sent %d bytes, but he does not have a partner", len_received);
+
+                    event_log(c, sent, MS_CLIENT);
+                }
+
+            }
         }
 
     }
 
     if (!c->closed_by_partner) {
 
-        printf("Closing client %s...\n", c->addr);
+        event_log(c, "Connection terminated", MS_CLIENT);
 
         close(c->socket);
 
@@ -191,7 +228,7 @@ void *on_client_conn(void *vargp)
             // When client partner is linked
             if (c->partner) {
 
-                printf("Closing partner of %s...\n", c->id);
+                event_log(c, "Partner connection terminated", MS_CLIENT);
 
                 c->partner->closed_by_partner = true;
                 close(c->partner->socket);
@@ -202,5 +239,31 @@ void *on_client_conn(void *vargp)
     }
 
 
-    c = 0;
+    free(c);
+}
+
+void event_log(struct client_infos* client, char msg[], int typeMsg)
+{
+    time_t timer;
+    char buff_timer[26];
+    struct tm* tm_info;
+
+    time(&timer);
+    tm_info = localtime(&timer);
+
+    strftime(buff_timer, 26, "%Y-%m-%d %H:%M:%S", tm_info);
+
+    switch (typeMsg) {
+        case MS_SERVER:
+            printf("%s %s\n", buff_timer, msg);
+        break;
+        case MS_CLIENT:
+            printf("%s %s[%s] %s\n", buff_timer, client->addr, client->id, msg);
+        break;
+        case MS_CLIENT_PARTNER:
+            printf("%s %s[%s] %s [%s]\n", buff_timer, client->addr, client->id, msg, client->id_partner_expected);
+        break;
+    }
+
+    fflush(stdout);
 }
