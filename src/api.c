@@ -192,7 +192,7 @@ void *on_client_conn(void *vargp)
 
                     event_log(c, sent, MS_CLIENT_PARTNER);
 
-                    send(c->partner->socket, buffer_received, strlen(buffer_received), 0);
+                    send(c->partner->socket, buffer_received, len_received, 0);
 
                 } else {
                     char sent[60];
